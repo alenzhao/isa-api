@@ -757,7 +757,7 @@ sample2	extraction	extract1	scanning	datafile1.raw"""
         expected = """Sample Name	Protocol REF	Extract Name	Protocol REF	Raw Data File
 sample1	extraction	extract1	scanning	datafile1.raw
 sample2	extraction	extract2	scanning	datafile1.raw"""
-        print(isatab.dumps(i))
+        print(isatab.dumps(i))  # FIXME: Broken as reverse traversal doesn't work when pools
         self.assertIn(expected, isatab.dumps(i))
 
 

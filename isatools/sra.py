@@ -51,8 +51,9 @@ def export(investigation, export_path, sra_settings=None, datafilehashes=None):
         hits = [pv for pv in process.parameter_values if
                 pv.category.parameter_name.term.lower().replace('_', ' ') == name.lower().replace('_', ' ')]
         if len(hits) > 1:
-            raise AttributeError("Multiple parameter values of category '{}' found".format(name))
-        elif len(hits) < 1:
+            # raise AttributeError("Multiple parameter values of category '{}' found".format(name))
+            pass
+        if len(hits) < 1:
             return None
         else:
             if isinstance(hits[0].value, OntologyAnnotation):
@@ -144,7 +145,10 @@ def export(investigation, export_path, sra_settings=None, datafilehashes=None):
                         curr_process = assay_seq_process
                         while sample is None:
                             sample = get_sample(curr_process)
-                            curr_process = curr_process.prev_process
+                            try:
+                                curr_process = curr_process.prev_process[0]
+                            except IndexError:
+                                curr_process = None
                         assay_to_export = \
                             {
                                 "sample": sample,

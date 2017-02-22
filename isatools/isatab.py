@@ -454,12 +454,14 @@ def _all_end_to_end_paths(G, start_nodes, end_nodes):
     for end in end_nodes:
         if isinstance(end, Sample):
             if end.derives_from:
-                paths += [list(nx.algorithms.shortest_simple_paths(G, end.derives_from, end))[-1]]
-                nodes_processed.extend([end.derives_from, end])
+                for derives_from in end.derives_from:
+                    paths += [list(nx.algorithms.shortest_simple_paths(G, derives_from, end))[-1]]
+                    nodes_processed.extend([end.derives_from, end])
         elif isinstance(end, DataFile):
             if end.generated_from:
-                paths += [list(nx.algorithms.shortest_simple_paths(G, end.generated_from, end))[-1]]
-                nodes_processed.extend([end.generated_from, end])
+                for generated_from in end.generated_from:
+                    paths += [list(nx.algorithms.shortest_simple_paths(G, generated_from, end))[-1]]
+                    nodes_processed.extend([end.generated_from, end])
 
     start_nodes_remaining = [x for x in start_nodes if x not in nodes_processed]
     end_nodes_remaining = [x for x in end_nodes if x not in nodes_processed]
@@ -470,7 +472,7 @@ def _all_end_to_end_paths(G, start_nodes, end_nodes):
         for process in processes_linked_to_node:
             cur_node = process
             while len(cur_node.prev_process) > 0:
-                cur_node = cur_node.prev_process[0]
+                cur_node = cur_node.prev_process[0]  # FIXME: does not work if pooling, need to go down all paths backwards
             if len(cur_node.inputs) > 0:
                 for input in cur_node.inputs:
                     paths += [list(nx.algorithms.shortest_simple_paths(G, input, end))[-1]]
