@@ -176,10 +176,10 @@ def export(investigation, export_path, sra_settings=None, datafilehashes=None):
                         assay_to_export['source']['taxon_id'] = organism_charac.value.term_accession[organism_charac.value.term_accession.index('_')+1:]
                         assay_to_export['source']['scientific_name'] = organism_charac.value.term
                         curr_process = assay_seq_process
-                        while curr_process.prev_process is not None:
+                        while len(curr_process.prev_process) > 0:
                             assay_to_export[curr_process.executes_protocol.protocol_type.term] = curr_process
                             try:
-                                curr_process = curr_process.prev_process
+                                curr_process = curr_process.prev_process[0]
                             except AttributeError:
                                 pass
                         target_taxon = get_pv(assay_to_export['library construction'], 'target_taxon')

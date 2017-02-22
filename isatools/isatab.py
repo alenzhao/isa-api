@@ -447,72 +447,46 @@ def _longest_path_and_attrs(paths):
 
 
 def _all_end_to_end_paths(G, start_nodes, end_nodes):
-    # paths = []
-    # start_nodes_processed = []
-    # end_nodes_processed = []
-    # # if we can calculate the correct start node from the .derives_from end node, get paths now and skip product loop
-    # for end_node in end_nodes:
-    #     if isinstance(end_node, Process):
-    #         for output in end_node.outputs:
-    #             if isinstance(output, Sample) and output.derives_from:
-    #                 paths += list(nx.algorithms.all_simple_paths(G, output.derives_from, end_node))
-    #                 start_nodes_processed.append(output.derives_from)
-    #                 end_nodes_processed.append(end_node)
-    #             elif isinstance(output, DataFile) and output.generated_from:
-    #                 paths += list(nx.algorithms.all_simple_paths(G, output.generated_from, end_node))
-    #                 start_nodes_processed.append(output.generated_from)
-    #                 end_nodes_processed.append(end_node)
-    #     elif isinstance(end_node, Sample) and end_node.derives_from:
-    #         for derives_from_node in end_node.derives_from:
-    #             paths += list(nx.algorithms.all_simple_paths(G, derives_from_node, end_node))
-    #             start_nodes_processed.append(derives_from_node)
-    #             end_nodes_processed.append(end_node)
-    # start_nodes_remaining = [item for item in start_nodes if item not in start_nodes_processed]
-    # end_nodes_remaining = [item for item in end_nodes if item not in end_nodes_processed]
-    # if len(start_nodes_remaining) + len(end_nodes_remaining) > 0:
-    #     print("{} start nodes and {} end nodes not processed, trying reverse traversal...".format(len(start_nodes_remaining), len(end_nodes_remaining)))
-    #     for end_node in end_nodes_remaining:
-    #         if isinstance(end_node, Process):
-    #             cur_node = end_node
-    #             while cur_node.prev_process:
-    #                 cur_node = cur_node.prev_process
-    #             if len(cur_node.inputs) > 0:
-    #                 for input_node in cur_node.inputs:
-    #                     paths += list(nx.algorithms.all_simple_paths(G, input_node, end_node))
-    #                     start_nodes_processed.append(input_node)
-    #                     end_nodes_processed.append(end_node)
-    #             else:
-    #                 paths += list(nx.algorithms.all_simple_paths(G, cur_node, end_node))
-    #                 start_nodes_processed.append(cur_node)
-    #                 end_nodes_processed.append(end_node)
-    #         elif isinstance(end_node, Sample):
-    #             processes_linked_to_sample = [p for p in G.nodes() if isinstance(p, Process) and end_node in p.outputs]
-    #             for process in processes_linked_to_sample:
-    #                 cur_node = process
-    #                 while cur_node.prev_process:
-    #                     cur_node = cur_node.prev_process
-    #                 if len(cur_node.inputs) > 0:
-    #                     for input_node in cur_node.inputs:
-    #                         paths += list(nx.algorithms.all_simple_paths(G, input_node, end_node))
-    #                         start_nodes_processed.append(input_node)
-    #                         end_nodes_processed.append(end_node)
-    #                 else:
-    #                     paths += list(nx.algorithms.all_simple_paths(G, cur_node, end_node))
-    #                     start_nodes_processed.append(cur_node)
-    #                     end_nodes_processed.append(end_node)
-    #
-    # start_nodes_remaining = [item for item in start_nodes if item not in start_nodes_processed]
-    # end_nodes_remaining = [item for item in end_nodes if item not in end_nodes_processed]
-    # if len(start_nodes_remaining) + len(end_nodes_remaining) > 0:
-    #     print("{} start nodes and {} end nodes not processed, trying brute force...".format(len(start_nodes_remaining), len(end_nodes_remaining)))
-    #     for start, end in itertools.product(start_nodes_remaining, end_nodes_remaining):
-    #         paths += list(nx.algorithms.all_simple_paths(G, start, end))
+
     paths = []
-    for start, end in itertools.product(start_nodes, end_nodes):
-        try:
-            paths += [list(nx.algorithms.shortest_simple_paths(G, start, end))[-1]]  # gets longest path between start and end
-        except NetworkXNoPath:
-            pass
+    nodes_processed = []
+    # check for from-link
+    for end in end_nodes:
+        if isinstance(end, Sample):
+            if end.derives_from:
+                paths += [list(nx.algorithms.shortest_simple_paths(G, end.derives_from, end))[-1]]
+                nodes_processed.extend([end.derives_from, end])
+        elif isinstance(end, DataFile):
+            if end.generated_from:
+                paths += [list(nx.algorithms.shortest_simple_paths(G, end.generated_from, end))[-1]]
+                nodes_processed.extend([end.generated_from, end])
+
+    start_nodes_remaining = [x for x in start_nodes if x not in nodes_processed]
+    end_nodes_remaining = [x for x in end_nodes if x not in nodes_processed]
+    print("{0} start nodes and {1} end nodes remaining, trying reverse traversel".format(len(start_nodes_remaining),
+                                                                                         len(end_nodes_remaining)))
+    for end in end_nodes_remaining:
+        processes_linked_to_node = [p for p in G.nodes() if isinstance(p, Process) and end in p.outputs]
+        for process in processes_linked_to_node:
+            cur_node = process
+            while len(cur_node.prev_process) > 0:
+                cur_node = cur_node.prev_process[0]
+            if len(cur_node.inputs) > 0:
+                for input in cur_node.inputs:
+                    paths += [list(nx.algorithms.shortest_simple_paths(G, input, end))[-1]]
+                    nodes_processed.extend([input, end])
+            else:
+                paths += list(nx.algorithms.shortest_simple_paths(G, cur_node, end))
+                nodes_processed.extend([cur_node, end])
+
+    start_nodes_remaining = [x for x in start_nodes if x not in nodes_processed]
+    end_nodes_remaining = [x for x in end_nodes if x not in nodes_processed]
+    print("{0} start nodes and {1} end nodes remaining, trying brute force".format(len(start_nodes_remaining),
+                                                                                   len(end_nodes_remaining)))
+    # default
+    for start, end in itertools.product(start_nodes_remaining, end_nodes_remaining):
+        if nx.algorithms.has_path(G, start, end):
+            paths += [list(nx.algorithms.shortest_simple_paths(G, start, end))[-1]]
     return paths
 
 
@@ -681,10 +655,7 @@ def write_assay_table_files(inv_obj, output_dir):
             columns = []
 
             start_nodes, end_nodes = _get_start_end_nodes(assay_obj.graph)
-            print(start_nodes, end_nodes)
             paths = _all_end_to_end_paths(assay_obj.graph, start_nodes, end_nodes)
-            print(paths)
-            print(assay_obj.graph.edges())
             longest_path = _longest_path_and_attrs(paths)
 
             for node in longest_path:
@@ -746,11 +717,7 @@ def write_assay_table_files(inv_obj, output_dir):
                         df_dict[olabel][-1] = node.name
                         for c in node.characteristics:
                             clabel = "{0}.Characteristics[{1}]".format(olabel, c.category.term)
-                            try:
-                                write_value_columns(df_dict, clabel, c)
-                            except KeyError:
-                                print(node.__dict__)
-                                raise KeyError
+                            write_value_columns(df_dict, clabel, c)
 
                     elif isinstance(node, Process):
                         olabel = "Protocol REF.{}".format(node.executes_protocol.name)
@@ -778,12 +745,6 @@ def write_assay_table_files(inv_obj, output_dir):
                     elif isinstance(node, Sample):
                         olabel = "Sample Name"
                         df_dict[olabel][-1] = node.name
-                        # for c in node.characteristics:
-                        #     clabel = "{0}.Characteristics[{1}]".format(olabel, c.category.term)
-                        #     write_value_columns(df_dict, clabel, c)
-                        # for fv in node.factor_values:
-                        #     fvlabel = "{0}.Factor Value[{1}]".format(olabel, fv.factor_name.name)
-                        #     write_value_columns(df_dict, fvlabel, fv)
 
                     elif isinstance(node, Material):
                         olabel = node.type
