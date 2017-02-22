@@ -1455,6 +1455,8 @@ def batch_validate(json_file_list):
                 )
     return batch_report
 
+"""Everything below here is the JSON Encoder"""
+
 
 class ISAJSONEncoder(JSONEncoder):
 

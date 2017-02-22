@@ -8,20 +8,7 @@ logging.basicConfig(format='%(asctime)s %(levelname)s: %(message)s', level=loggi
 logger = logging.getLogger(__name__)
 
 
-def convert(json_fp, path, config_dir=None):
-    """ Converter for ISA JSON to SRA.
-    :param json_fp: File pointer to ISA JSON input
-    :param path: Directory for output to be written
-    :param config_dir: path to JSON configuration
-    """
-    from isatools.convert import json2isatab, isatab2sra
-    json2isatab.convert(json_fp=json_fp, path=path, config_dir=config_dir)
-    isatab2sra.create_sra(path, path)
-    for f in glob.iglob(os.path.join(path, '*.txt')):  # remove generated isatab files
-        os.remove(f)
-
-
-def convert2(json_fp, path, config_dir=None, sra_settings=None, datafilehashes=None, validate_first=True):
+def convert(json_fp, path, config_dir=None, sra_settings=None, datafilehashes=None, validate_first=True):
     """ (New) Converter for ISA JSON to SRA.
     :param json_fp: File pointer to ISA JSON input
     :param path: Directory for output to be written
