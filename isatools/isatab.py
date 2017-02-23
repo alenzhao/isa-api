@@ -489,6 +489,25 @@ def _all_end_to_end_paths(G, start_nodes, end_nodes):
     for start, end in itertools.product(start_nodes_remaining, end_nodes_remaining):
         if nx.algorithms.has_path(G, start, end):
             paths += [list(nx.algorithms.shortest_simple_paths(G, start, end))[-1]]
+            nodes_processed.extend([start, end])
+
+    start_nodes_remaining = [x for x in start_nodes if x not in nodes_processed]
+    end_nodes_remaining = [x for x in end_nodes if x not in nodes_processed]
+
+    if len(start_nodes_remaining) > 0 and len(end_nodes_remaining) == 0:
+        for start, end in itertools.product(start_nodes_remaining, end_nodes):
+            if nx.algorithms.has_path(G, start, end):
+                paths += [list(nx.algorithms.shortest_simple_paths(G, start, end))[-1]]
+                nodes_processed.extend([start, end])
+
+    start_nodes_remaining = [x for x in start_nodes if x not in nodes_processed]
+    end_nodes_remaining = [x for x in end_nodes if x not in nodes_processed]
+
+    if len(start_nodes_remaining) == 0 and len(end_nodes_remaining) > 0:
+        for start, end in itertools.product(start_nodes, end_nodes_remaining):
+            if nx.algorithms.has_path(G, start, end):
+                paths += [list(nx.algorithms.shortest_simple_paths(G, start, end))[-1]]
+                nodes_processed.extend([start, end])
     return paths
 
 
@@ -544,6 +563,7 @@ def write_study_table_files(inv_obj, output_dir):
                 columns += flatten(map(lambda x: get_fv_columns(olabel, x), node.factor_values))
 
         omap = get_object_column_map(columns, columns)
+
         # load into dictionary
         df_dict = dict(map(lambda k: (k, []), flatten(omap)))
 
@@ -557,6 +577,7 @@ def write_study_table_files(inv_obj, output_dir):
                 df_dict[k].extend([""])
 
             sample_in_path_count = 0
+
             for node in path:
                 if isinstance(node, Source):
                     olabel = "Source Name"
@@ -628,7 +649,6 @@ def write_study_table_files(inv_obj, output_dir):
         DF.columns = columns
         DF = DF.replace('', np.nan)
         DF = DF.dropna(axis=1, how='all')
-
         with open(os.path.join(output_dir, study_obj.filename), 'w') as out_fp:
             DF.to_csv(path_or_buf=out_fp, index=False, sep='\t', encoding='utf-8')
 
@@ -797,10 +817,10 @@ def write_assay_table_files(inv_obj, output_dir):
                     columns[i] = col[col.rindex(".") + 1:]
 
             print("Rendered {} paths".format(len(DF.index)))
-            if len(DF.index) > 1:
-                if len(DF.index) > len(DF.drop_duplicates().index):
-                    print("Dropping duplicates...")
-                    DF = DF.drop_duplicates()
+            # if len(DF.index) > 1:
+            #     if len(DF.index) > len(DF.drop_duplicates().index):
+            #         print("Dropping duplicates...")
+            #         DF = DF.drop_duplicates()
 
             print("Writing {} rows".format(len(DF.index)))
             # reset columns, replace nan with empty string, drop empty columns
@@ -3360,6 +3380,19 @@ class ProcessSequenceFactory:
         except AttributeError:
             object_column_map = get_object_column_map(DF.columns, DF.columns)
 
+        def get_node_by_label_and_key(l, k):
+            n = None
+            lk = ":".join([l, k])
+            if l == "Source Name":
+                n = sources[lk]
+            if l == "Sample Name":
+                n = samples[lk]
+            elif l in ("Extract Name", "Labeled Extract Name"):
+                n = other_material[lk]
+            elif l.endswith("File"):
+                n = data[lk]
+            return n
+
         for _cg, column_group in enumerate(object_column_map):
             # for each object, parse column group
 
@@ -3398,6 +3431,23 @@ class ProcessSequenceFactory:
 
                             material.characteristics.append(characteristic)
 
+                        if "Material Type" in column_group:
+                            category_key = "Material Type"
+
+                            try:
+                                category = characteristic_categories[category_key]
+                            except KeyError:
+                                category = OntologyAnnotation(term=category_key)
+                                characteristic_categories[category_key] = category
+
+                            characteristic = Characteristic(category=category)
+
+                            v, _ = get_value("Material Type", column_group, object_series, ontology_source_map,
+                                             unit_categories)
+                            characteristic.value = v
+
+                            material.characteristics.append(characteristic)
+
                         if isinstance(material, Sample) and self.factors is not None:
 
                             for fv_column in [c for c in column_group if c.startswith('Factor Value[')]:
@@ -3423,26 +3473,10 @@ class ProcessSequenceFactory:
                                 material.factor_values.append(fv)
 
             elif object_label.startswith('Protocol REF'):
-
-                def get_node_by_label_and_key(l, k):
-                    n = None
-                    lk = l + ':' + k
-                    if l == 'Source Name':
-                        n = sources[lk]
-                    if l == 'Sample Name':
-                        n = samples[lk]
-                    elif l in ('Extract Name', 'Labeled Extract Name'):
-                        n = other_material[lk]
-                    elif l.endswith('File'):
-                        n = data[lk]
-                    return n
-
                 object_label_index = list(DF.columns).index(object_label)
 
                 for _, object_series in DF.iterrows():  # don't drop duplicates
-
                     protocol_ref = object_series[column_group[0]]
-
                     process_key = process_keygen(protocol_ref, column_group, _cg, DF.columns, object_series, _, DF)
 
                     try:
@@ -3459,25 +3493,24 @@ class ProcessSequenceFactory:
                         output_node_value = object_series[output_node_label]
 
                         node_key = output_node_value
-
                         output_node = get_node_by_label_and_key(output_node_label, node_key)
 
                         if output_node is not None:
-                            process.outputs.append(output_node)
+                            if output_node not in process.outputs:
+                                process.outputs.append(output_node)
 
                     input_node_index = find_lt(node_cols, object_label_index)
 
                     if input_node_index > -1:
-
                         input_node_label = DF.columns[input_node_index]
                         input_node_value = object_series[input_node_label]
 
                         node_key = input_node_value
-
                         input_node = get_node_by_label_and_key(input_node_label, node_key)
 
                         if input_node is not None:
-                            process.inputs.append(input_node)
+                            if input_node not in process.inputs:
+                                process.inputs.append(input_node)
 
                     name_column_hits = [n for n in column_group if n in _LABELS_ASSAY_NODES]
 
@@ -3485,7 +3518,6 @@ class ProcessSequenceFactory:
                         process.name = str(object_series[name_column_hits[0]])
 
                     for pv_column in [c for c in column_group if c.startswith('Parameter Value[')]:
-
                         category_key = pv_column[16:-1]
 
                         try:
@@ -3508,14 +3540,35 @@ class ProcessSequenceFactory:
 
                         process.parameter_values.append(parameter_value)
 
+                    if "Array Design REF" in column_group:
+                        process.array_design_ref, _ = get_value("Array Design REF", column_group, object_series, ontology_source_map, unit_categories)
+
         # now go row by row pulling out processes and linking them accordingly
 
         for _, object_series in DF.iterrows():  # don't drop duplicates
-            process_key_sequence = list()
+            process_key_sequence = []
+            source_context = None
+            sample_context = None
 
             for _cg, column_group in enumerate(object_column_map):
                 # for each object, parse column group
                 object_label = column_group[0]
+
+                if object_label.startswith("Source Name"):
+                    node_name = object_series[object_label]
+                    source_context = get_node_by_label_and_key(object_label, node_name)
+
+                if object_label.startswith("Sample Name"):
+                    node_name = object_series[object_label]
+                    sample_context = get_node_by_label_and_key(object_label, node_name)
+                    if source_context is not None and source_context not in sample_context.derives_from:
+                        sample_context.derives_from.append(source_context)
+
+                # if object_label.endswith(" File"):
+                #     node_name = object_series[object_label]
+                #     data = get_node_by_label_and_key(object_label, node_name)
+                #     if sample_context is not None and sample_context not in data.generated_from:
+                #         data.generated_from.append(sample_context)
 
                 if object_label.startswith('Protocol REF'):
                     protocol_ref = object_series[column_group[0]]

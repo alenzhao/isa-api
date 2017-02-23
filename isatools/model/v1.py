@@ -374,7 +374,10 @@ class Person(Commentable):
         self.fax = fax
         self.address = address
         self.affiliation = affiliation
-        self.roles = roles
+        if roles is None:
+            self.roles = []
+        else:
+            self.roles = roles
 
 
 class Study(Commentable, object):

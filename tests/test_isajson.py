@@ -126,3 +126,187 @@ class TestIsaJson(unittest.TestCase):
         self.assertEqual(len(assay_gx['materials']['otherMaterials']), 29)  # 29 other materials in a_matteo-assay-Gx.txt
         self.assertEqual(len(assay_gx['dataFiles']), 29)  # 29 data files  in a_matteo-assay-Gx.txt
         self.assertEqual(len(assay_gx['processSequence']), 116)  # 116 processes in in a_matteo-assay-Gx.txt
+
+
+class UnitTestISAJSONEncoder(unittest.TestCase):
+
+    def setUp(self):
+        self.encoder = isajson.ISAJSONEncoder()
+
+    def test_remove_nulls(self):
+        d = {
+            "a": None,
+            "b": "b"
+        }
+        expected_result = {
+            "a": "",
+            "b": "b"
+        }
+        result = self.encoder.nulls_to_str(d=d)
+        self.assertEqual(result, expected_result)
+
+    # def test_nulls_to_str(self):
+    #     self.fail("test not implemented")
+
+    def test_list_of(self):
+        class SimpleObject:
+            def __init__(self, a, b):
+                self.a = a
+                self.b = b
+
+        def get_simple_object(o):
+            return {
+                "a": o.a,
+                "b": o.b
+            }
+        o = SimpleObject(a="a", b="b")
+        result = self.encoder.list_of(get_simple_object, [o])
+        expected_result = [{
+            "a": "a",
+            "b": "b"
+        }]
+        self.assertEqual(result, expected_result)
+
+    def test_get_comment(self):
+        from isatools.model.v1 import Comment
+        o = Comment(name="k")
+        o.value = "v"
+        result = self.encoder.get_comment(o)
+        expected_result = {
+            "name": "k",
+            "value": "v"
+        }
+        self.assertEqual(result, expected_result)
+
+    def test_get_ontology_source(self):
+        from isatools.model.v1 import OntologySource
+        o = OntologySource(name="k")
+        o.description = "d"
+        o.file = "f"
+        o.version = "v"
+        result = self.encoder.get_ontology_source(o)
+        expected_result = {
+                "name": "k",
+                "description": "d",
+                "file": "f",
+                "version": "v"
+            }
+        self.assertEqual(result, expected_result)
+
+    def test_get_ontology_annotation(self):
+        from isatools.model.v1 import OntologyAnnotation
+        o = OntologyAnnotation()
+        o.term = "term"
+        o.term_accession = "accession"
+        result = self.encoder.get_ontology_annotation(o)
+        expected_result = {
+                "@id": "#" + str(id(o)),
+                "annotationValue": "term",
+                "termAccession": "accession",
+                "termSource": ""
+            }
+        self.assertEqual(result, expected_result)
+
+    def test_get_ontology_annotation_with_ontology_source(self):
+        from isatools.model.v1 import OntologyAnnotation, OntologySource
+        o = OntologyAnnotation()
+        o.term = "term"
+        o.term_accession = "accession"
+        o.term_source = OntologySource(name="k")
+        result = self.encoder.get_ontology_annotation(o)
+        expected_result = {
+            "@id": "#" + str(id(o)),
+            "annotationValue": "term",
+            "termAccession": "accession",
+            "termSource": "k"
+        }
+        self.assertEqual(result, expected_result)
+
+    def test_get_person(self):
+        from isatools.model.v1 import Person
+        o = Person()
+        o.first_name = "first"
+        o.last_name = "last"
+        o.mid_initials = "mid"
+        o.phone = "555-1865"
+        o.fax = "555-1866"
+        o.address = "address"
+        o.affiliation = "affiliation"
+        o.email = "first@affiliation"
+        result = self.encoder.get_person(o)
+        expected_result = {
+            "phone": "555-1865", 
+            "email": "first@affiliation",
+            "roles": [], 
+            "address": "address", 
+            "comments": [], 
+            "lastName": "last", 
+            "affiliation": "affiliation", 
+            "firstName": "first", 
+            "fax": "555-1866", 
+            "midInitials": "mid"
+        }
+        self.assertEqual(result, expected_result)
+
+    def test_get_publication(self):
+        from isatools.model.v1 import Publication, OntologyAnnotation
+        o = Publication()
+        o.pubmed_id = "000001"
+        o.doi = "doi"
+        o.author_list = "a. author, b. author"
+        o.title = "title"
+        o.status = OntologyAnnotation(term="published")
+        result = self.encoder.get_publication(o)
+        expected_result = {
+            "doi": "doi", 
+            "authorList": "a. author, b. author", 
+            "pubMedID": "000001", 
+            "status": {
+                "termAccession": "", 
+                "annotationValue": "published", 
+                "@id": "#" + str(id(o.status)),
+                "termSource": ""
+            }, 
+            "title": "title"
+        }
+
+        self.assertEqual(result, expected_result)
+
+    # def test_get_protocol(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_source(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_characteristic(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_value(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_characteristic_category(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_sample(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_factor(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_other_material(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_process(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_parameter_value(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_study(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_assay(self):
+    #     self.fail("test not implemented")
+    #
+    # def test_get_data_file(self):
+    #     self.fail("test not implemented")
